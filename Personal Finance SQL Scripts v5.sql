@@ -1,0 +1,268 @@
+-- BEFORE -- (0 RECORDS)
+SELECT * FROM USERS;
+
+-- BEFORE -- (0 RECORDS)
+SELECT * FROM ACCOUNTS;
+
+-- BEFORE -- (0 RECORDS)
+SELECT * FROM TRANSACTION;
+
+-- BEFORE -- (0 RECORDS)
+SELECT * FROM CURRENCY;
+
+-- BEFORE -- (0 RECORDS)
+SELECT * FROM CATEGORY;
+
+DESC USERS;
+DESC ACCOUNTS;
+DESC TRANSACTION;
+DESC CURRENCY;
+DESC CATEGORY;
+
+-- -----------------1st Step ----------------------------
+-- Run following DB Trigger Scripts
+-- Show Triggers - Should be null
+-- 1. after_user_insert
+-- 2. after_transaction_insert
+-- 3. after_cash_insert
+-- 4. after_transactions_update
+
+-- disable safe update mode
+SET SQL_SAFE_UPDATES=0;
+
+-- Shows Triggers [Before - 0 Triggers]
+SHOW TRIGGERS;
+
+-- Drop Trigger
+-- DROP TRIGGER after_transactions_update;
+-- DROP TRIGGER after_users_insert;
+
+-- Create trigger on Insert of Users
+DELIMITER $$
+
+CREATE TRIGGER after_users_insert
+AFTER INSERT
+ON USERS FOR EACH ROW
+BEGIN
+
+	DECLARE userId INT;
+    DECLARE accountName VARCHAR(255);
+    
+    SELECT USER_ID FROM USERS ORDER BY USER_ID DESC LIMIT 1
+    INTO
+    userId;
+    
+    SELECT USER_NAME FROM USERS ORDER BY CRE_ON DESC LIMIT 1
+    INTO
+    accountName;
+    
+    INSERT INTO ACCOUNTS 
+    (USER_ID, ACC_TYPE, ACC_NAME, ACC_BALANCE,CURRENCY_ID,STAT,CRE_ON,UPD_ON)
+    VALUES
+    (userId, 'BASIC', accountName, '0', '1', 'A', sysdate(), sysdate());
+    
+END$$
+
+DELIMITER ;
+    
+
+-- Create trigger on Add Transaction (-) DEBIT
+DELIMITER $$
+
+CREATE TRIGGER after_transaction_insert
+AFTER INSERT
+ON TRANSACTION FOR EACH ROW
+BEGIN
+	DECLARE rowCount INT;
+	
+    SELECT TRANS_ID FROM TRANSACTION ORDER BY TRANS_ID DESC LIMIT 1
+    INTO
+    rowCount;
+    
+	UPDATE ACCOUNTS a
+			INNER JOIN
+		TRANSACTION t ON a.ACC_ID = t.ACC_ID
+	SET
+		a.ACC_BALANCE = a.ACC_BALANCE - t.TRANS_AMOUNT
+	WHERE
+		t.TRANS_TYPE = 'Debit' AND t.TRANS_ID = rowCount;
+END$$
+
+DELIMITER ;
+
+-- Create trigger on Add Cash (+) CREDIT
+DELIMITER $$
+
+CREATE TRIGGER after_cash_insert
+AFTER INSERT
+ON TRANSACTION FOR EACH ROW
+BEGIN
+	DECLARE rowCount INT;
+	
+    SELECT TRANS_ID FROM TRANSACTION ORDER BY TRANS_ID DESC LIMIT 1
+    INTO
+    rowCount;
+    
+	UPDATE ACCOUNTS a
+			INNER JOIN
+		TRANSACTION t ON a.ACC_ID = t.ACC_ID
+	SET
+		a.ACC_BALANCE = a.ACC_BALANCE + t.TRANS_AMOUNT
+	WHERE
+		t.TRANS_TYPE = 'Credit' AND t.TRANS_ID = rowCount;
+END$$
+
+DELIMITER ;
+
+-- Create trigger on transaction updates
+DELIMITER $$
+
+CREATE TRIGGER after_transactions_update
+AFTER UPDATE
+ON TRANSACTION FOR EACH ROW
+BEGIN
+	DECLARE updatedRow INT;
+	
+    SELECT TRANS_ID FROM TRANSACTION ORDER BY UPD_ON DESC LIMIT 1
+    INTO
+    updatedRow;
+
+    IF old.TRANS_AMOUNT <> new.TRANS_AMOUNT THEN
+       UPDATE ACCOUNTS a
+			INNER JOIN
+		TRANSACTION t ON a.ACC_ID = t.ACC_ID
+	SET
+		a.ACC_BALANCE = a.ACC_BALANCE + t.TRANS_AMOUNT
+	WHERE
+		t.TRANS_TYPE = 'Credit'
+        AND t.TRANS_ID = updatedRow;
+    END IF;
+    
+	IF old.TRANS_AMOUNT <> new.TRANS_AMOUNT THEN
+       UPDATE ACCOUNTS a
+			INNER JOIN
+		TRANSACTION t ON a.ACC_ID = t.ACC_ID
+	SET
+		a.ACC_BALANCE = a.ACC_BALANCE - t.TRANS_AMOUNT
+	WHERE
+		t.TRANS_TYPE = 'Debit'
+        AND t.TRANS_ID = updatedRow;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- Shows Triggers [After - 4 Triggers]
+SHOW TRIGGERS;
+
+-- ---------------2nd Step ----------------------------
+-- Excute Insertion patch for Currency and Category setup records
+
+INSERT INTO CURRENCY VALUES
+(1,'Singapore dollar (S$)',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+(2,'US dollar (USD)',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+(3,'Malaysia dollar (RM)',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+(4,'Swedish dollar (SEK)',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+
+INSERT INTO CATEGORY VALUES
+(1, 'Shopping',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+(2, 'Food and Drinks',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+(3, 'Bills and Utilities',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+(4, 'Others',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
+(5, 'Revenue',"A",CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+
+-- ---------------3rd STEP ----------------------------
+-- Register User at Front end application
+-- Verify that USER along with ACCOUNT record is created
+-- AFTER -- (Depending on how many users you registered RECORDS)
+SELECT * FROM USERS;
+-- AFTER -- (Depending on how many users-account you registered RECORDS)
+SELECT * FROM ACCOUNTS;
+-- AFTER -- (4 RECORDS)
+SELECT * FROM CURRENCY;
+
+-- AFTER -- (5 RECORDS)
+SELECT * FROM CATEGORY;
+
+-- ----------------------- CONGRATS YOU ARE DONE! -----------------------------------
+
+
+-- Create an Admin account
+INSERT INTO USERS (USER_NAME, USER_EMAIL, PASSWORD, FIRST_NAME, LAST_NAME, IS_ADMIN, LAST_LOGIN, STAT, CRE_ON, UPD_ON) VALUES
+('zhunnn','zhun_admin@gmail.com', 'passwordadmin', 'sim','yizhun',1,NULL, "A", CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
+
+UPDATE USERS SET IS_ADMIN = 1 WHERE USER_ID = 1;
+-- INSERT INTO ACCOUNTS (ACC_ID,USER_ID, ACC_TYPE, ACC_NAME, ACC_BALANCE, CURRENCY_ID, CRE_ON,STAT)
+-- VALUES
+-- (1,1,'BASIC','SimYizhun',100000,1,CURRENT_TIMESTAMP,'A');
+
+
+-- enable safe update mode
+-- SET SQL_SAFE_UPDATES=1;
+
+-- 4th Step create transactions at front end application
+
+-- DEBIT TRANSACTIONS
+INSERT INTO TRANSACTION (ACC_ID, TRANS_DATE, TRANS_AMOUNT, TRANS_DESCRIPTION, TRANS_TYPE, CATEGORY_ID, CRE_ON, STAT)
+VALUES (1,'2020-01-06',10000,'Leisure','Debit', 2,CURRENT_TIMESTAMP,"A");
+INSERT INTO TRANSACTION (ACC_ID, TRANS_DATE, TRANS_AMOUNT, TRANS_DESCRIPTION, TRANS_TYPE, CATEGORY_ID, CRE_ON, STAT)
+VALUES (1,'2020-02-05',10000,'Food','Debit', 3,CURRENT_TIMESTAMP,"A");
+INSERT INTO TRANSACTION (ACC_ID, TRANS_DATE, TRANS_AMOUNT, TRANS_DESCRIPTION, TRANS_TYPE, CATEGORY_ID, CRE_ON, STAT)
+VALUES (1,'2020-03-01',30000,'Leisure','Debit', 1,CURRENT_TIMESTAMP,"A");
+INSERT INTO TRANSACTION (ACC_ID, TRANS_DATE, TRANS_AMOUNT, TRANS_DESCRIPTION, TRANS_TYPE, CATEGORY_ID, CRE_ON, STAT)
+VALUES (1,'2020-03-01',50000,'Leisure','Debit', 1,CURRENT_TIMESTAMP,"A");
+
+-- Credit Transactions
+INSERT INTO TRANSACTION (ACC_ID, TRANS_DATE, TRANS_AMOUNT, TRANS_DESCRIPTION, TRANS_TYPE, CATEGORY_ID, CRE_ON, STAT)
+VALUES (1,'2020-04-01',100000,'Investment','Credit', 5,CURRENT_TIMESTAMP,"A");
+
+-- BUG MUST CHECK IF ACC_BALANCE IS ABLE TO MINUS THE VALUE
+SELECT * FROM TRANSACTION;
+SELECT * FROM ACCOUNTS;
+
+-- UPDATE TRANSACTION
+UPDATE TRANSACTION SET TRANS_DESCRIPTION = 'OTHERS8', TRANS_AMOUNT = 900, UPD_ON = sysdate() WHERE TRANS_ID = 5;
+UPDATE TRANSACTION SET TRANS_DESCRIPTION = 'Investment2', TRANS_AMOUNT = 2000000, UPD_ON = sysdate() WHERE TRANS_ID = 1;
+
+-- AFTER -- (200 RECORDS)
+SELECT * FROM USERS;
+SELECT * FROM ACCOUNTS;
+SELECT * FROM TRANSACTION;
+SELECT * FROM CURRENCY;
+SELECT * FROM CATEGORY;
+
+-- change password
+UPDATE USERS SET PASSWORD = 'BANANA' WHERE USER_ID = '?';
+
+-- Retrieve balance of account
+SELECT ACC_BALANCE FROM ACCOUNTS WHERE ACC_ID = '?';
+
+-- Retreive catogory type --> Display category cards in dashboard
+SELECT * FROM CATEGORY WHERE NAME <> 'Revenue' ORDER BY CATEGORY_ID ASC;
+
+-- Retrieve currency type --> Item card select in Settings change currency
+SELECT * FROM CURRENCY;
+
+-- [Dashboard Categories] Get the sum of expenditure by category for a particular account
+
+SELECT SUM(TRANS_AMOUNT) FROM TRANSACTION t, ACCOUNTS a
+WHERE t.ACC_ID = a.ACC_ID 
+AND a.ACC_ID = 1
+AND t.TRANS_TYPE = 'Debit'
+AND t.CATEGORY_ID = 1;
+
+
+
+-- DROP TABLE USERS;
+-- DROP TABLE CURRENCY;
+-- DROP TABLE TRANSACTION;
+-- DROP TABLE ACCOUNTS;
+-- DROP TABLE CATEGORY;
+-- DROP TABLE ADMIN;
+
+-- Useful SQL statements
+ALTER TABLE USERS
+MODIFY USER_NAME VARCHAR(100);
+
+ALTER TABLE TRANSACTION
+MODIFY USER_NAME VARCHAR(100);
