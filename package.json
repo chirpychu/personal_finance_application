@@ -1,0 +1,29 @@
+{
+  "name": "personal-finance-app-server",
+  "version": "1.0.0",
+  "description": "Personal Finance Application Backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon src/server.js --exec \"npm run lint && node\"",
+    "lint": "eslint"
+  },
+  "keywords": [
+    "TIC2601_Grp18"
+  ],
+  "author": "TIC2601_Grp18",
+  "license": "ISC",
+  "dependencies": {
+    "@hapi/joi": "^17.1.1",
+    "bcrypt": "^5.0.0",
+    "body-parser": "^1.19.0",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "eslint": "^7.9.0",
+    "express": "^4.17.1",
+    "jsonwebtoken": "^8.5.1",
+    "morgan": "^1.10.0",
+    "mysql2": "^2.2.1",
+    "nodemon": "^2.0.4",
+    "sequelize": "^6.3.5"
+  }
+}
